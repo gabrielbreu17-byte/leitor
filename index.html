@@ -1,61 +1,137 @@
-<!-- Importa a biblioteca de OCR sem mexer no design -->
-<script src="https://jsdelivr.net"></script>
-
-<script>
-  // 1. Procura o botão de escolher arquivo e o texto de "Inicializando leitura..."
-  const inputImagem = document.querySelector('input[type="file"]');
-  
-  // Vamos procurar o texto de status dinamicamente pelo que está escrito na tela
-  const elementos = document.querySelectorAll('p, span, div, h3');
-  let statusTexto = null;
-  for (let el of elementos) {
-    if (el.textContent.includes('Inicializando leitura') || el.textContent.includes('Aguarde')) {
-      statusTexto = el;
-      break;
-    }
-  }
-
-  // 2. Executa a leitura assim que você escolhe a foto
-  if (inputImagem && statusTexto) {
-    inputImagem.addEventListener('change', function(e) {
-      const arquivo = e.target.files[0];
-      if (!arquivo) return;
-
-      // Muda o texto mantendo a sua cor e fonte originais
-      statusTexto.innerHTML = "⏳ Processando imagem... Aguarde de 5 a 10 segundos.";
-
-      Tesseract.recognize(
-        arquivo,
-        'por', // Lê em português
-        { logger: m => console.log(m) }
-      ).then(({ data: { text } }) => {
-        
-        if (text.trim() === "") {
-          statusTexto.innerHTML = "⚠️ Nenhum texto claro foi encontrado na imagem.";
-        } else {
-          statusTexto.innerHTML = "✅ **Texto Extraído:**";
-          
-          // Cria um parágrafo estilizado com a mesma fonte do seu site para exibir o texto
-          let blocoTexto = document.getElementById('resultado-ocr');
-          if (!blocoTexto) {
-            blocoTexto = document.createElement('p');
-            blocoTexto.id = 'resultado-ocr';
-            blocoTexto.style.marginTop = '20px';
-            blocoTexto.style.whiteSpace = 'pre-wrap';
-            blocoTexto.style.background = '#f8f9fa'; // Um fundo sutil para destacar o texto
-            blocoTexto.style.padding = '15px';
-            blocoTexto.style.borderRadius = '8px';
-            blocoTexto.style.border = '1px solid #e9ecef';
-            blocoTexto.style.textAlign = 'left'; // Texto alinhado à esquerda para leitura
-            statusTexto.parentNode.appendChild(blocoTexto);
-          }
-          blocoTexto.textContent = text;
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leitor de Texto de Imagens</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
         }
+        .container {
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            max-width: 600px;
+            width: 100%;
+            text-align: center;
+        }
+        h1 {
+            color: #1a73e8;
+            margin-bottom: 10px;
+        }
+        p.descricao {
+            color: #5f6368;
+            margin-bottom: 25px;
+        }
+        .upload-section {
+            border: 2px dashed #1a73e8;
+            padding: 20px;
+            border-radius: 8px;
+            background-color: #f8f9fa;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+        #preview {
+            max-width: 100%;
+            max-height: 300px;
+            margin-top: 15px;
+            border-radius: 8px;
+            display: none;
+        }
+        #status {
+            margin: 20px 0;
+            font-weight: bold;
+            color: #1a73e8;
+        }
+        #resultado-caixa {
+            display: none;
+            text-align: left;
+            margin-top: 20px;
+        }
+        textarea {
+            width: 100%;
+            height: 150px;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #dadce0;
+            resize: vertical;
+            font-family: inherit;
+            box-sizing: border-box;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Leitor de Texto de Imagens</h1>
+        <p class="descricao">Carregue a foto da obra para extrair o texto completo dela abaixo.</p>
         
-      }).catch(erro => {
-        console.error(erro);
-        statusTexto.innerHTML = "❌ Erro ao ler a imagem. Tente novamente.";
-      });
-    });
-  }
-</script>
+        <div class="upload-section">
+            <input type="file" id="arquivo" accept="image/*">
+            <img id="preview" alt="Preview da imagem carregada">
+        </div>
+
+        <div id="status">⏳ Pronto para receber uma imagem.</div>
+
+        <div id="resultado-caixa">
+            <label style="font-weight: bold; color: #3c4043;" for="texto-extraido">Texto Extraído:</label>
+            <textarea id="texto-extraido" readonly></textarea>
+        </div>
+    </div>
+
+    <!-- Importa a biblioteca de leitura de imagem (OCR) -->
+    <script src="https://jsdelivr.net"></script>
+
+    <script>
+        const inputArquivo = document.getElementById('arquivo');
+        const imgPreview = document.getElementById('preview');
+        const txtStatus = document.getElementById('status');
+        const resultadoCaixa = document.getElementById('resultado-caixa');
+        const txtExtraido = document.getElementById('texto-extraido');
+
+        inputArquivo.addEventListener('change', function(e) {
+            const arquivo = e.target.files[0];
+            if (!arquivo) return;
+
+            // Mostra o preview da imagem na tela
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                imgPreview.src = event.target.result;
+                imgPreview.style.display = 'block';
+            }
+            reader.readAsDataURL(arquivo);
+
+            // Atualiza o status
+            txtStatus.innerHTML = "⏳ Inicializando leitura... Aguarde de 5 a 10 segundos.";
+            resultadoCaixa.style.display = 'none';
+
+            // Executa a inteligência de OCR para ler a imagem
+            Tesseract.recognize(
+                arquivo,
+                'por', // Idioma português
+                { logger: m => console.log(m) }
+            ).then(({ data: { text } }) => {
+                if (text.trim() === "") {
+                    txtStatus.innerHTML = "⚠️ Nenhum texto claro foi encontrado na imagem.";
+                } else {
+                    txtStatus.innerHTML = "✅ Leitura concluída com sucesso!";
+                    resultadoCaixa.style.display = 'block';
+                    txtExtraido.value = text;
+                }
+            }).catch(erro => {
+                console.error(erro);
+                txtStatus.innerHTML = "❌ Erro ao ler a imagem. Tente novamente.";
+            });
+        });
+    </script>
+</body>
+</html>
